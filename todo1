@@ -1,0 +1,13 @@
+Voici les changements radicale de notre Projet
+lors de la selection des équipement en bas (dans l affichage, il faut que en meme temps on fait insertion de chaque ConfigurationPratique)
+de chaque equipement. Apres submit, il y aura donc insertion des ConfigurationPratique de chaque equipement dans base. (avant tout autre calcul)
+
+Modification avec ajout d un tableau reliant EquipementEnergie avec une colonne apelé EnergieUnitaire et prixUnitaire.
+
+Veuillez implémenter complète la logique de surplus.
+Voici ce qui ce passe. Apres calcul théorique des type "ps" (fonction déjà disponible) et apres avoir obtenu le calcul pratique des 
+type "ps", (à remarquer que lors du findAll dans la base pour ConfigurationPratique, il faut s assurer que les id Equipement se correspondent bien)
+, on va , à partir des EnergieUnitaire de chaque equipement, pour les type "ps", lorsqu on obtient le puissance pratique du panneau, on va compter à partir du Energie Unitaire du panneau, la quantité minimum nécessaire pour atteindre la puissance théorique.
+(arrondissement sup)Ensuite donc, on va obtenir quantité nécessaire pour chaque panneau.
+
+Attente d affichage finale nécessaire : liste de chaque equipement de type "ps" avec leur propre pris (qté * PU), et en bas on dois proposer parmi les panneau le moins cher.

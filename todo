@@ -1,0 +1,181 @@
+Projet: Consommation avec panneau solaire et batterie
+
+Scénario 1 : Entrée des besoins de matériel (input)
+Il existe donc une insertion de matériel multiple.
+Les champs : matériel(selection venant du base) - Tranche (selection venant du base) - heure debut (utilisation) - heure fin(utilisation) - puissqnce(en watt)
+Veuillez gener dans un fichier conception-init.sql le script sqlserver pour la creation de table sur les conceptions concérnés suivant :
+
+    Materiel :
+        id
+        libelle
+    Tranche :
+        id
+        libelle (parmi "AM","Hariva","Alina")
+        heure debut
+        heure fin
+    MaterielPuissance :
+        id
+        idMaterielle
+        puissance
+    UtilisationDetail :
+        id
+        idMaterielPuissance
+        idTranche
+        HeureDebut
+        HeureFin
+
+Apres submit de l input donc, on aura une instance de UtilisationDetail.
+A remarquer, pour la représentation des entités pour ces tables, les id foreignkey representeront vraiment des instance et non de l id tout simplement
+
+veuillez donc d abord me fournir les codes nécessaire pour garantir la réalisation de la premère scénario (affichage + lien base + model +controller etc). Le bouton submit n aura encore aucune action
+A respecter:
+    Pour le design, otper pour un design professionnel, simple et bien visible.
+    Pour le code, opter pour un code professionnel, simple et facile à lire et comprendre 
+
+Pour les donnés de test comme les matériels et tranche, veuillez generer les scripts sqlserver dans un fichier data-init.sql pour les insertions
+
+scénario 2 : Affichage des besoins 
+
+scénario 2A : Besoins théoriques:
+Apres evaluation et calcul de UtilisationDetail obtenu , l objectif c est d afficher les sources d energies nécessaires avec puissance (1 panneau et 1 batterie)
+
+les nouvelles tables à creer dans conception-init.sql:
+    Equipement
+        id
+        libelle
+        type ("ps","btr","autre") //ps pout panneau solaire, btr batterie
+    EquipementEnergie
+        id
+        idEquipement
+        grandeurEnergetique
+    ConfigurationRendement
+        id
+        idTranche
+        idEquipementEnergie
+        taux
+
+A modifier dans le input, il y aura une section en bas de l insertion multiple pour selection multiplement aussi les Equipement à utiliser , cela va directement 
+mener à la creation d une lise de EquipementEnergie à partir de la liste des Equipements obtenus dans la selection. Donc , les autre attributs de l element de la liste EquipementEnergie serton encore vide.  
+Principe general : pendant le AM et le hariva, panneau solaire en marche et batterie en charge.
+la puissance du panneau qu on va chercher va donc pouvoir combler les puissances matériel ainsi que le charge du batterie. Pendant le alina, c est la batterie 
+seule qui sera en marche.De plus, cette puissance de panneau sera le plus optimales
+
+Voici donc les fonctions de bases à implémenter , mais vous pouvez creer des fonctions utilitaires si besoins
+
+1 - filtrerUtilsationDSelonEquipementE
+Cette fonction va recevoir comme argument liste UtilisationDetail lud et un EquipementEnergie ee
+il va tester 
+    si ee.getEquipement.getType!="btr" (sans casse), alors on boucle lud et on utilise la fonction copy (pour les non referencement) pour copier
+        les elements de lud dans la liste à retourner verifiant la condition si lud.getElement(i).getTranche().getLibelle() different de alina
+    si ee.getEquipement.getType=="btr" (sans casse), alors on boucle lud et on utilise la fonction copy (pour les non referencement) pour copier
+        les elements de lud dans la liste à retourner verifiant la condition si lud.getElement(i).getTranche().getLibelle() égal à alina
+on retourne à la fin
+
+2 - calculMultiplicative
+Cette fonction va avoir comme argument liste UtilisationDetail lud et un EquipementEnergie ee
+on verifie si ee.getEquipement.getType=="btr" 
+si vrai, cette fonction va calculer l energie pour chaque element de lud par puissance * temps et le temps sera la duree entre HeureDebut et HeureFin de l utilisation
+ce sera une valeur accumuler pour l energie (donc depart 0)
+Cependant, il n y a pas de valeur retour mais on va juste faire du set le ee.setGrandeurEnergetique
+et puis c est ok pour la fonction
+
+3 - caclulMaxAdditive
+Cette fonction va avoir comme argument liste UtilisationDetail lud 
+on va filtrer sur lud d abord . dans parcours element de lud, si element.getTranche = AM , on copie dans la liste maraina
+si element.getTranche = heriva, on copie dans la liste hariva. Pour else, aucune action.
+
+Apres avoir obtenue les deux listes,
+on fait d abord findAll dans ConfigurationRendement et dans Tranche
+    pour la liste maraina, on prend le ConfigurationRendement (cmaraina) tel que ConfigurationRendement.getidTranche = Tranche.getId (avec Tranche.getLibelle="AM") et ConfigurationRendement.getEquipementEnergie.getEquipement.getType="ps"
+    pour la liste hariva, on prend le ConfigurationRendement (chariva) tel que ConfigurationRendement.getidTranche = Tranche.getId (avec Tranche.getLibelle="hariva") et ConfigurationRendement.getEquipementEnergie.getEquipement.getType="ps"
+puissancemaraina = 0 et puissancehariva = 0;
+ensuite on fait entrer dans un boucle de liste maraina le puissancemaraina
+    On va prendre le maximum entre les puissance dans la liste, Cependant si il y a chevauchement d heure d utilisation (à evaluer les heure de debut et fin d utilisation)
+        entre les Materiel, on somme leur puissance puis on évolue si il devient le maximum, si oui donc on les prends et continue la recherche de maximum 
+            jusqu à fin boucle
+apres on fait entrer dans un boucle de liste hariva le puissancehariva
+    On va prendre le maximum entre les puissance dans la liste, Cependant si il y a chevauchement d heure d utilisation (à evaluer les heure de debut et fin d utilisation)
+        entre les Materiel, on somme leur puissance puis on évolue si il devient le maximum, si oui donc on les prends et continue la recherche de maximum 
+            jusqu à fin boucle
+
+apres la boucle, on evalue d abord le max entre cmaraina.taux et chariva.taux
+puissanceEvaluer = 0;
+si cmaraina max, donc on prend l inferieur, donc on fait
+puissanceEvaluer = puissancehariva * 100/chariva
+Ensuite on evalue si puissanceEvaluer inferieur à puissancemaraina, si oui, donc on met à jour puissanceEvaluer par la valeur de puissancemaraina.
+Meme Principes le max entre cmaraina et chariva est chariva mais donc les puissance et c utilisé seront celles de maraina puis on evalue puissanceEvaluer à puissancemaraina à la fin comme ci dessus
+A la fin, on retourne puissanceEvaluer;
+
+4 - caclulMaxAdditiveAutre(UtilisationDetail lud , EquipementEnergie ee)
+    puissance = caclulMaxAdditive(lud)
+    puissanceReel = puissance * 2;
+    ee.setGrandeurEnergetique(puissanceReel);
+
+5 - calcBatterieMinim(EquipementEnergie ee)
+    on fait d abord findAll dans ConfigurationRendement et dans Tranche
+    pour la liste maraina, on prend le ConfigurationRendement (cmaraina) tel que ConfigurationRendement.getidTranche = Tranche.getId (avec Tranche.getLibelle="AM") et ConfigurationRendement.getEquipementEnergie.getEquipement.getType="ps"
+    pour la liste hariva, on prend le ConfigurationRendement (chariva) tel que ConfigurationRendement.getidTranche = Tranche.getId (avec Tranche.getLibelle="hariva") et ConfigurationRendement.getEquipementEnergie.getEquipement.getType="ps"
+    soit dmaraina la durrée du tranche maraina (donc getTranche.getHeureDebut et HeureFin du cmaraina)
+    soir dhariva la durée pour tranche hariva
+    puissanceBatterie = ee.getGrandeurEnergetique()/(dmaraina * cmaraina.taux/100 + dhariva * chariva.taux/100)
+    retourne puissanceBatterie;
+
+6 - caclulMaxAdditiveSurplus(liste UtilisationDetail lud, EquipementEnergie ee, liste EquipementEnergie le)
+    puissance = caclulMaxAdditive(lud)
+    puissanceBatterie = 0;
+    on parcourt dans le puis on prend l element ayant type de Equipement 'btr' (posons x) puis puissanceBatterie = calcBatterieMinim(x);
+
+    ee.setGrandeurEnergetique(puissance + puissanceBatterie);
+7- ProposerTheorique(liste UtilisationDetail lud,liste EquipementEnergie le)
+on réarange la liste EquipementEnergie pour que l element ayant type de Equipement 'btr' dans EquipementEnergie soit au premier indice
+for each le as e
+    list tempo = filtrerUtilsationDSelonEquipementE (lud, e)
+    if element ayant type de Equipement 'btr' 
+        calculMultiplicative(tempo,e)
+    if element ayant type de Equipement 'ps' 
+        caclulMaxAdditiveSurplus(tempo,e,le)
+    else 
+        caclulMaxAdditiveAutre(tempo,e)
+
+Donc, apres le submit du premier scénario, les données sont envoyé grace au controller vers la fonction ProposerTheorique,
+Ensuite dans une nouvelle page ou fenetre je ne sais pas, on affichera pour chaque EquipementEnergie les grandeurEnergetique nécessaire
+
+scenario 2B : Besoin pratique
+
+Conception à ajouter:
+    ConfigurationPratique
+        id
+        idEquipementEnergie
+        taux
+
+Modification dans EquipementEnergie , ajout de colonne:
+EquipementEnergie
+        id
+        idEquipement
+        grandeurEnergetique
+        type ("prtq" ou "thrq) (par defaut "prtq")
+
+logique métier (fonction):
+1 - proposerPratique(EquipementEnergie ee,liste ConfigurationPratique lc)
+On copie d abord ee dans  un valeur resultat de retour (à part id)
+on cherche d abord dans ls si il y a lc.get(i).get(EquipementEnergie).getId = ee.getId() 
+
+si cela vrai (supposons qu on a trouvé un element x), alors on test le type de Equipement dans ee 
+    si 'btr', 
+        on a energie = ee.grandeurEnergetique * ( 1 + x.taux/100)
+        resultat.setGrandeurEnergetique(energie)
+    si 'ps'
+        on a energie = ee.grandeurEnergetique * 100 / x.taux
+        resultat.setGrandeurEnergetique(energie)
+
+resultat.setType("prtq")
+retourner resultat
+
+2 - proposerEnsemble (liste UtilisationDetail lud,liste EquipementEnergie le_theorique, liste  EquipementEnergie le_pratique (vide au début))
+ProposerTheorique(liste UtilisationDetail lud,liste EquipementEnergie le)
+on fait du findAll dans base pour ConfigurationPratique
+for e in le
+    le_pratique.append(proposerPratique(e,list result findAll ConfigurationPratique))
+
+Changement dans l affichage pour le résultat : 
+    on affichera en haut la liste les resultat théoriques (le_theorique ) et en bas la liste les resultat pratique (le_pratique) en bas
