@@ -1,0 +1,12 @@
+Maintenant, on ajoute aussi avant submit pour les calcul du proposerEnsemeble, dans l interface, il y a
+d abord deux nouveaux champs : Prix weekend / wh (champs prix) et prix ouvrables/wh (champs prix)
+
+Le but, à la fin de la calcul , on doit aussi montrer le montant des énergies non utilisés venant du panneau.
+
+Pour ce faire, on doit chercher dans la liste utilisation détail pour l equipement panneau (type ps) les Wh dispo.
+Exemple, Soit un panneau de 500 W. de 8h-9h, on a seulement utilisé 300 W, donc il y a 200 W de libre pendant cette période d utilisation.
+On aura donc : p*t = 200W * 1h = 200Wh. La recherche continue encore et on fait cumulation jusqu'à la fin de la liste pour panneau
+On aura donc d abord un résultat en Wh. On fera (resultat en Wh ) * (Prix weekend / wh inséré avant) pour avoir le 
+prix inutilisé pour le weekend.De plus, (resultat en Wh ) * (prix ouvrables / wh inséré avant) pour avoir le prix inutilisé pour 
+jour ouvrable et on affiche aussi ces réseultat dans l affichage. 
+Veuillez implémenter correctement cela.

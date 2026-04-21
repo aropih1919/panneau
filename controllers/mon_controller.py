@@ -447,23 +447,127 @@ class MonController:
         propositions.sort(key=lambda item: (item.prix_total, item.quantite_necessaire, item.equipement_energie.equipement.libelle))
         return propositions
 
+    def calculer_energie_inutilisee(
+        self,
+        lud: list[UtilisationDetail],
+        besoins_pratiques: list[EquipementEnergie],
+    ) -> float:
+        """Calcule les Wh inutilises des panneaux solaires (type ps).
+
+        Pour chaque ps pratique, on recupere sa puissance disponible (grandeur_energetique en W).
+        On parcourt les utilisations hors tranche 'alina' (les memes que celles filtrees pour un ps)
+        et pour chaque intervalle on cumule :
+            max(0, puissance_ps - puissance_consommee) * duree_h
+        Si plusieurs ps sont presents, chacun contribue independamment.
+        """
+        wh_total = 0.0
+
+        # Filtrer les lud pertinents pour les ps (hors alina), identique a filtrerUtilsationDSelonEquipementE pour ps
+        lud_ps = [
+            detail for detail in lud
+            if detail.tranche.libelle.strip().lower() != "alina"
+        ]
+        if not lud_ps:
+            return 0.0
+
+        for ee in besoins_pratiques:
+            if ee.equipement.type.strip().lower() != "ps":
+                continue
+            if ee.grandeur_energetique is None or ee.grandeur_energetique <= 0:
+                continue
+
+            puissance_ps = ee.grandeur_energetique  # W disponibles par ce panneau
+
+            for detail in lud_ps:
+                duree_h = self._duree_heure(detail.heure_debut, detail.heure_fin)
+                puissance_consommee = detail.materiel_puissance.puissance
+                libre = puissance_ps - puissance_consommee
+                if libre > 0:
+                    wh_total += libre * duree_h
+
+        return wh_total
+
     def proposerEnsemble(
         self,
         lud: list[UtilisationDetail],
         le_theorique: list[EquipementEnergie],
         le_pratique: list[EquipementEnergie],
-    ) -> tuple[list[EquipementEnergie], list[EquipementEnergie], list[PropositionSurplus], PropositionSurplus | None]:
-        resultats_theoriques = self.ProposerTheorique(lud, le_theorique)
+        prix_weekend_wh: float = 0.0,
+        prix_ouvrables_wh: float = 0.0,
+    ) -> tuple[
+        list[EquipementEnergie],
+        list[EquipementEnergie],
+        list[PropositionSurplus],
+        PropositionSurplus | None,
+        float,
+        float,
+        float,
+    ]:
+        """Retourne (theoriques, pratiques, propositions, meilleure,
+        wh_libres, montant_weekend, montant_ouvrables).
+        """
         configurations_pratiques = list(self._configurations_pratiques)
 
+        # --- Etape 1 : theorique btr ---
+        theoriques_btr: list[EquipementEnergie] = []
+        for e in le_theorique:
+            if e.equipement.type.strip().lower() == "btr":
+                ee = deepcopy(e)
+                tempo = self.filtrerUtilsationDSelonEquipementE(lud, ee)
+                self.calculMultiplicative(tempo, ee)
+                theoriques_btr.append(ee)
+
+        # --- Etape 2 : pratique immediat pour les btr ---
+        pratiques_btr: list[EquipementEnergie] = []
+        for ee_btr in theoriques_btr:
+            pratiques_btr.append(self.proposerPratique(ee_btr, configurations_pratiques))
+
+        # --- Etape 3 : theorique pour les non-btr (ps, autre)
+        #     Les ps utilisent pratiques_btr au lieu de liste_reordonnee ---
+        theoriques_non_btr: list[EquipementEnergie] = []
+        for e in le_theorique:
+            type_equipement = e.equipement.type.strip().lower()
+            if type_equipement == "btr":
+                continue
+            ee = deepcopy(e)
+            tempo = self.filtrerUtilsationDSelonEquipementE(lud, ee)
+            if type_equipement == "ps":
+                self.caclulMaxAdditiveSurplus(tempo, ee, pratiques_btr)
+            else:
+                self.caclulMaxAdditiveAutre(tempo, ee)
+            theoriques_non_btr.append(ee)
+
+        # --- Etape 4 : pratique pour les non-btr ---
+        pratiques_non_btr: list[EquipementEnergie] = []
+        for ee in theoriques_non_btr:
+            pratiques_non_btr.append(self.proposerPratique(ee, configurations_pratiques))
+
+        # --- Assemblage final (btr en premier, coherent avec l'ancien tri) ---
+        resultats_theoriques = theoriques_btr + theoriques_non_btr
+        tous_les_pratiques = pratiques_btr + pratiques_non_btr
+
+        self.equipements_energie_en_attente = list(resultats_theoriques)
+
         le_pratique.clear()
-        for equipement_energie in resultats_theoriques:
-            le_pratique.append(self.proposerPratique(equipement_energie, configurations_pratiques))
+        le_pratique.extend(tous_les_pratiques)
 
         propositions = self.calculer_propositions_surplus(le_pratique)
         meilleure = propositions[0] if propositions else None
 
-        return list(resultats_theoriques), list(le_pratique), propositions, meilleure
+        # --- Calcul energie inutilisee ---
+        wh_libres = self.calculer_energie_inutilisee(lud, tous_les_pratiques)
+        montant_weekend = wh_libres * prix_weekend_wh
+        montant_ouvrables = wh_libres * prix_ouvrables_wh
+
+        return (
+            list(resultats_theoriques),
+            list(le_pratique),
+            propositions,
+            meilleure,
+            wh_libres,
+            montant_weekend,
+            montant_ouvrables,
+        )
 
     def _trouver_materiel(self, materiel_id: int) -> Materiel:
         for item in self._materiels:

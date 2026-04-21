@@ -1,0 +1,12 @@
+veuillez adopter le changement suivant. 
+dans le mon_controller dans /controllers , veuillez on sait qu il y a la fonction proposerEnsemble
+
+Logique avant : on cherche toutes les propositions théoriques avant calcul des propositions pratiques.
+Logique maintenant : même chose sauf pour la batterie. Pour être plus clair, on cherche propositions théoriques 
+puis directement le pratique pour les EquipementEnergie ayant comme Equipement.type = btr.
+La raison, on prend les resultats des pratiques des btr (possible 1 seul btr ou une liste), et c est ce que 
+le calcul théorique des types ps vont utiliser mais plus le btr théoriques.
+Donc ici, self.caclulMaxAdditiveSurplus(tempo, equipement_energie, liste_reordonnee) (dans proposer théorique avec bloc condition if tpe ps)
+, on n utilise plus liste_reordonnee mais directement une nouvelle liste des pratiques (pour les batteries)
+
+Resumé donc : on utilise resultat pratique des type btr pour chercher le théorique des ps

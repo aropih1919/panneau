@@ -14,8 +14,8 @@ class FenetreFormulaire(tk.Toplevel):
         self.controller = controller
 
         self.title("Scenario 1 - Donnees depuis la base")
-        self.geometry("1120x720")
-        self.minsize(980, 620)
+        self.geometry("1120x780")
+        self.minsize(980, 680)
         self.configure(bg="#eef2f5")
 
         self.utilisations_locales: list[UtilisationDetail] = self.controller.get_utilisations_details()
@@ -40,7 +40,7 @@ class FenetreFormulaire(tk.Toplevel):
 
     def _construire_vue(self) -> None:
         wrapper = ttk.Frame(self, style="Panel.TFrame", padding=20)
-        wrapper.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.95, relheight=0.93)
+        wrapper.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.95, relheight=0.95)
 
         ttk.Label(wrapper, text="Scenario 1 - UtilisationDetail depuis la base", style="TitreForm.TLabel").pack(anchor="w", pady=(0, 8))
         ttk.Label(
@@ -138,6 +138,24 @@ class FenetreFormulaire(tk.Toplevel):
             style="Primary.TButton",
             command=self.appliquer_equipements_selectionnes,
         ).pack(side="left")
+
+        # --- Zone prix énergie inutilisée + Submit ---
+        ttk.Separator(wrapper, orient="horizontal").pack(fill="x", pady=(10, 8))
+
+        prix_zone = ttk.Frame(wrapper, style="Panel.TFrame")
+        prix_zone.pack(fill="x", pady=(0, 6))
+
+        ttk.Label(prix_zone, text="Prix energie inutilisee du panneau :", style="SousTitreForm.TLabel").pack(side="left", padx=(0, 16))
+
+        ttk.Label(prix_zone, text="Prix weekend / Wh", style="Form.TLabel").pack(side="left")
+        self.prix_weekend_entry = ttk.Entry(prix_zone, width=14)
+        self.prix_weekend_entry.pack(side="left", padx=(6, 20))
+        self.prix_weekend_entry.insert(0, "0.0")
+
+        ttk.Label(prix_zone, text="Prix ouvrables / Wh", style="Form.TLabel").pack(side="left")
+        self.prix_ouvrables_entry = ttk.Entry(prix_zone, width=14)
+        self.prix_ouvrables_entry.pack(side="left", padx=(6, 0))
+        self.prix_ouvrables_entry.insert(0, "0.0")
 
         bas = ttk.Frame(wrapper, style="Panel.TFrame")
         bas.pack(fill="x", pady=(8, 0))
@@ -261,17 +279,55 @@ class FenetreFormulaire(tk.Toplevel):
             messagebox.showwarning("Donnees manquantes", "Selectionnez au moins un equipement avant submit.")
             return
 
+        # Validation et lecture des prix énergie inutilisée
         try:
-            besoins_theoriques, besoins_pratiques, propositions_surplus, meilleure_proposition = self.controller.proposerEnsemble(
+            prix_weekend_wh = float(self.prix_weekend_entry.get().strip())
+        except ValueError:
+            messagebox.showerror("Prix invalide", "Le prix weekend / Wh doit etre numerique.")
+            return
+        try:
+            prix_ouvrables_wh = float(self.prix_ouvrables_entry.get().strip())
+        except ValueError:
+            messagebox.showerror("Prix invalide", "Le prix ouvrables / Wh doit etre numerique.")
+            return
+
+        if prix_weekend_wh < 0:
+            messagebox.showerror("Prix invalide", "Le prix weekend / Wh ne peut pas etre negatif.")
+            return
+        if prix_ouvrables_wh < 0:
+            messagebox.showerror("Prix invalide", "Le prix ouvrables / Wh ne peut pas etre negatif.")
+            return
+
+        try:
+            (
+                besoins_theoriques,
+                besoins_pratiques,
+                propositions_surplus,
+                meilleure_proposition,
+                wh_libres,
+                montant_weekend,
+                montant_ouvrables,
+            ) = self.controller.proposerEnsemble(
                 self.utilisations_locales,
                 self.equipements_energie_locaux,
                 [],
+                prix_weekend_wh=prix_weekend_wh,
+                prix_ouvrables_wh=prix_ouvrables_wh,
             )
         except ValueError as erreur:
             messagebox.showerror("Calcul impossible", str(erreur))
             return
 
-        FenetreBesoinsTheoriques(self, besoins_theoriques, besoins_pratiques, propositions_surplus, meilleure_proposition)
+        FenetreBesoinsTheoriques(
+            self,
+            besoins_theoriques,
+            besoins_pratiques,
+            propositions_surplus,
+            meilleure_proposition,
+            wh_libres,
+            montant_weekend,
+            montant_ouvrables,
+        )
 
     @staticmethod
     def _label_equipement(equipement: Equipement) -> str:
