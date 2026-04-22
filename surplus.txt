@@ -1,4 +1,6 @@
-Maintenant, on ajoute aussi avant submit pour les calcul du proposerEnsemeble, dans l interface, il y a
+J ai effectué ces changements avant.Je liste juste pourque tu vois:
+
+"""Maintenant, on ajoute aussi avant submit pour les calcul du proposerEnsemeble, dans l interface, il y a
 d abord deux nouveaux champs : Prix weekend / wh (champs prix) et prix ouvrables/wh (champs prix)
 
 Le but, à la fin de la calcul , on doit aussi montrer le montant des énergies non utilisés venant du panneau.
@@ -10,3 +12,104 @@ On aura donc d abord un résultat en Wh. On fera (resultat en Wh ) * (Prix weeke
 prix inutilisé pour le weekend.De plus, (resultat en Wh ) * (prix ouvrables / wh inséré avant) pour avoir le prix inutilisé pour 
 jour ouvrable et on affiche aussi ces réseultat dans l affichage. 
 Veuillez implémenter correctement cela.
+
+
+------
+
+Dans mon_controller, il y une fonctioncalculer_energie_inutilisee. C est presque correcte. Cependant, il faut 
+considérer les puissance de ps (ou des (possibles si list panneau)) avec leur taux de rendement.
+On a déjà ceci dans la base de donnée 
+CREATE TABLE dbo.ConfigurationRendement (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    idTranche INT NOT NULL,
+    idEquipementEnergie INT NOT NULL,
+    taux DECIMAL(6,2) NOT NULL,
+    CONSTRAINT FK_ConfigurationRendement_Tranche FOREIGN KEY (idTranche)
+        REFERENCES dbo.Tranche(id),
+    CONSTRAINT FK_ConfigurationRendement_EquipementEnergie FOREIGN KEY (idEquipementEnergie)
+        REFERENCES dbo.EquipementEnergie(id),
+    CONSTRAINT CK_ConfigurationRendement_Taux CHECK (taux > 0 AND taux <= 100)
+);
+Avec le model :
+from dataclasses import dataclass
+
+from models.equipement_energie import EquipementEnergie
+from models.tranche import Tranche
+
+
+@dataclass(frozen=True)
+class ConfigurationRendement:
+    id: int
+    tranche: Tranche
+    equipement_energie: EquipementEnergie
+    taux: float
+. Autrement dit, on ne doit donc pas directement utiliser la puissance du ps mais on doit voir dans base si 
+il y a un rendement pour le id du equipement de type ps , mais de plus qu il existe un rendement pour le 
+tranche de l utilisation qu on parle. Si oui, on pase à un bloc if de reduction selon le taux . (taux en pourcentage
+donc puissance ps*taux/100) avant de procédé au calcul. Je ne sais pas si vous arriver à comprendre correctement ce que j attends d abord.
+Posez des questions si il y a des doutes sur ma proposition de logique ou des erreurs ou des choses pas clair
+
+
+------
+
+Il faut aussi considerer les chevauchemments d heure qui impactera les puissance utilisé:
+exemple , soit un panneau de 500 W: 6h-10h :materiel 120 W à utiliser. 8h-12h:materiel 100 W à utiliser.(on peut ecnore ajouter)
+Ici, 6h-8h: (supposons que rendement 100%), on a 500-120 inutilisé.
+8h-10h : 500 - (120 + 100) inutilisé.
+10h-12h : 500 - 100 inutilisé
+
+
+--------
+Puisqu on sait déjà que la puissance que la batterie va consommée dans le panneau sera toujours present dans les deux tranches (a part le alina), donc 
+on a deux chois : soit on l enlève de la puissance qu on utilise dans calcul inutilisé avant de clasuler, soit à chaque calcul de calcul inutilisé on l enlève à chaque fois.
+En parlant de puissance utilisé par la batterie venant du panneau, je parle du resultat de la fonction calcBatterieMinim(element).
+--------
+
+j arrive pas à determiner où dans notre logique était fausse, mais une autre approche qui et correcte aussi pour calculer energie inutilisé c est :
+prendre d abord la puissance total (sans reduction vis à vis de rendement mais puissance theorique des panneau (type ps)(des si il y en a beaucoup))
+.Ensuite, on separe puissance max utilisé selon les tranche AM et hariva (différent car selon leur propore rendement)
+Apres, on cherche d abord l energie total max (p *t) pour chaque tranche. Apres cela, à chaque utilisation , on estime l energie utilisé au total (au total car on
+condière toujours si il y avait eu un chevauchement) , puis on fait donc diminuer l energie total max (selon la tranche d utilisation appropriée). A la fin de la fonction, on additionne les deux energie total max restant pour les deux tranches et c est notre résultat, donc on calcul les 
+pris selon cela"""
+
+
+Toutefois maintenant, je pense que l implementation n etait pas encore correcte car j ai des resultats faux.
+Je vais te donner un exemple precis.
+On a ces materiels et les utilisation comme exemple:
+
+On totalise max energie durant AM et max energie durant hariva 
+puissance theorique : 125W
+tAm = 125*11 (p*t)(125 est la puissance théorique  max utilisable du panneau qu on a obtenu (apres avoir considerer les rendement))
+thariva = 62.5*2 apres avoir considérer le rendement en harive qui était 50%
+
+total energie utilisation (sans batterie d abord):
+AMWh = 240 Wh
+
+Batterie pratique : 60 Wh
+donc on a comme resultat energie inutilisée : tAm +thariva - AMWh -60Wh
+
+UPDATE Tranche SET HeureFin = '17:00:00' WHERE libelle = 'AM';
+UPDATE Tranche SET HeureFin = '19:00:00' WHERE libelle = 'Hariva';
+
+----
+Si je veux effectuer le changement suivant, qu avez vous besoins pour bien les implémenter?
+
+Tu vois, il y a déjà ce logique implémentée dans le controlleur.
+Voici suive, je vous donne juste pour que vous voyez juste (mais à ne pas implémenter). Voila donc """ Voici les changements radicale de notre Projet
+lors de la selection des équipement en bas (dans l affichage, il faut que en meme temps on fait insertion de chaque ConfigurationPratique)
+de chaque equipement. Apres submit, il y aura donc insertion des ConfigurationPratique de chaque equipement dans base. (avant tout autre calcul)
+
+Modification avec ajout d un tableau reliant EquipementEnergie avec une colonne apelé EnergieUnitaire et prixUnitaire.
+
+Veuillez implémenter complète la logique de surplus.
+Voici ce qui ce passe. Apres calcul théorique des type "ps" (fonction déjà disponible) et apres avoir obtenu le calcul pratique des 
+type "ps", (à remarquer que lors du findAll dans la base pour ConfigurationPratique, il faut s assurer que les id Equipement se correspondent bien)
+, on va , à partir des EnergieUnitaire de chaque equipement, pour les type "ps", lorsqu on obtient le puissance pratique du panneau, on va compter à partir du Energie Unitaire du panneau, la quantité minimum nécessaire pour atteindre la puissance théorique.
+(arrondissement sup)Ensuite donc, on va obtenir quantité nécessaire pour chaque panneau.
+
+Attente d affichage finale nécessaire : liste de chaque equipement de type "ps" avec leur propre pris (qté * PU), et en bas on dois proposer parmi les panneau le moins cher."""
+
+Maintenant, comme j ai dit il y a un soucis, car dans le calcul de qté pour les panneaux à acheter, on peut avoir des resultat decimal qui seront arrondi supérieurement(ex :3.4, donc quantité devient 4).
+Je veux donc maintenant donnée à l interface pour l user le choix de l energie à utiliser venant du panneau lors de calcul energie inutilisé. il y aura donc deux chois : Energie théorique simple et energie théorique du surplus.
+Si c est energie theorique simple donc, aucun changement
+Si en revanche c est energie théorique du surplus, donc avant toute calcul, exemple on a qté du panneau 5, donc on fait energie unitaire * 11 * ConfigurationPratique du panneau pour calculer l energie. On fera donc reference au résulat de cela pour le calcul 

@@ -65,7 +65,8 @@ Voici donc les fonctions de bases à implémenter , mais vous pouvez creer des f
 1 - filtrerUtilsationDSelonEquipementE
 Cette fonction va recevoir comme argument liste UtilisationDetail lud et un EquipementEnergie ee
 il va tester 
-    si ee.getEquipement.getType!="btr" (sans casse), alors on boucle lud et on utilise la fonction copy (pour les non referencement) pour copier
+    si ee.getEquipement.getType!="btr
+" (sans casse), alors on boucle lud et on utilise la fonction copy (pour les non referencement) pour copier
         les elements de lud dans la liste à retourner verifiant la condition si lud.getElement(i).getTranche().getLibelle() different de alina
     si ee.getEquipement.getType=="btr" (sans casse), alors on boucle lud et on utilise la fonction copy (pour les non referencement) pour copier
         les elements de lud dans la liste à retourner verifiant la condition si lud.getElement(i).getTranche().getLibelle() égal à alina

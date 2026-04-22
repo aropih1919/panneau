@@ -1,20 +1,33 @@
 from copy import deepcopy
+
 from datetime import datetime, time, timedelta
+
 import math
 
+
 from models.configuration_pratique import ConfigurationPratique
+
 from database.connexion import ConnexionSQLServer
+
 from models.configuration_rendement import ConfigurationRendement
+
 from models.equipement import Equipement
+
 from models.equipement_energie import EquipementEnergie
+
 from models.materiel import Materiel
+
 from models.materiel_puissance import MaterielPuissance
+
 from models.proposition_surplus import PropositionSurplus
+
 from models.tranche import Tranche
+
 from models.utilisation_detail import UtilisationDetail
 
 
 class MonController:
+
     def __init__(self) -> None:
         self.db = ConnexionSQLServer()
         self._references_depuis_db = False
@@ -193,6 +206,18 @@ class MonController:
         self._configurations_pratiques = configurations_chargees
         return selection_finale, configurations_finales
 
+    def _trouver_tranche_id_pour_sec(self, sec: float) -> int | None:
+        for tranche in self._tranches:
+            debut = tranche.heure_debut.hour * 3600 + tranche.heure_debut.minute * 60
+            fin = tranche.heure_fin.hour * 3600 + tranche.heure_fin.minute * 60
+            if fin <= debut:  # tranche qui traverse minuit
+                if sec >= debut or sec < fin:
+                    return tranche.id
+            else:
+                if debut <= sec < fin:
+                    return tranche.id
+        return None
+
     def enregistrer_equipements_selectionnes(
         self,
         selections: list[dict[str, float | int]],
@@ -284,9 +309,9 @@ class MonController:
         energie_totale = 0.0
         for detail in lud:
             duree_heure = self._duree_heure(detail.heure_debut, detail.heure_fin)
-            energie_totale += detail.materiel_puissance.puissance * duree_heure
+            energie_totale = round(energie_totale + detail.materiel_puissance.puissance * duree_heure, 10)
 
-        ee.grandeur_energetique = energie_totale
+        ee.grandeur_energetique = round(energie_totale, 2)
 
     def caclulMaxAdditive(self, lud: list[UtilisationDetail]) -> float:
         maraina: list[UtilisationDetail] = []
@@ -318,7 +343,7 @@ class MonController:
             if puissance_evaluer < puissance_hariva:
                 puissance_evaluer = puissance_hariva
 
-        return puissance_evaluer
+        return round(puissance_evaluer, 2)
 
     def calculMaxAdditive(self, lud: list[UtilisationDetail]) -> float:
         return self.caclulMaxAdditive(lud)
@@ -326,7 +351,7 @@ class MonController:
     def caclulMaxAdditiveAutre(self, lud: list[UtilisationDetail], ee: EquipementEnergie) -> None:
         puissance = self.caclulMaxAdditive(lud)
         puissance_reel = puissance * 2
-        ee.grandeur_energetique = puissance_reel
+        ee.grandeur_energetique = round(puissance_reel, 2)
 
     def calcBatterieMinim(self, ee: EquipementEnergie) -> float:
         cmaraina = self._trouver_configuration_par_tranche_et_type_equipement("AM", "ps")
@@ -338,10 +363,10 @@ class MonController:
         dhariva = self._duree_heure(chariva.tranche.heure_debut, chariva.tranche.heure_fin)
 
         energie_batterie = ee.grandeur_energetique or 0.0
-        denom = dmaraina * cmaraina.taux / 100.0 + dhariva * chariva.taux / 100.0
+        denom = round(dmaraina * cmaraina.taux / 100.0 + dhariva * chariva.taux / 100.0, 10)
         if denom <= 0:
             return 0.0
-        return energie_batterie / denom
+        return round(energie_batterie / denom, 2)
 
     def caclulMaxAdditiveSurplus(
         self,
@@ -357,7 +382,7 @@ class MonController:
                 puissance_batterie = self.calcBatterieMinim(element)
                 break
 
-        ee.grandeur_energetique = puissance + puissance_batterie
+        ee.grandeur_energetique = round(puissance + puissance_batterie, 2)
 
     def ProposerTheorique(
         self,
@@ -407,7 +432,19 @@ class MonController:
             if ee.id is not None and element.equipement_energie.id == ee.id:
                 configuration = element
                 break
-            if element.equipement_energie.equipement.id == ee.equipement.id:
+            if element.equipesurplus, existance de heure de pointe qui seront majorée. 
+exemple : heure de pointe dans base : 12 h - 14 h et 17h - 19h
+supposons que dans la saisie, on a inséré : prix jour ouvrable/wh =100 et prix jour weekend/wh = 150.
+Il existe dans base taux de majoration (specifique pour jour ouvrable et pour jour weekend) 
+    taux_maj pour ouvrable 40%
+    taux_maj pour weekend 50%.
+    Il y aura donc de l impacte dans calcul de prix car pour les energies inutilisés qui seront dans les tranche d heure de point, il y a majoration selon le taux pour
+    le prix/wh (exemple si normal 100 Ar/wh pour jour ouvrable par exemple, lors de heure de pointe, ça devient 150 Ar/wh si on a inséré que taux majoration pour jour ouvrable 50%)
+    De meme pour jour weekend.
+Attente : ajout de champs avant submit pour les calcul, à part prix/Wh pour les deux jour (ouvrable et weekend), on ajoute aussi deux champs pour taux de majoration (un pour ouvrable et un autre pour weekend)
+
+Quels sont les fichiers de mon projet que vous avez besoin pour effectuer correctement ce changement? Veuillez aussi me donnez donc la conception dans base pour 
+l heure de pointe car vous en aurez besoin l implémentation de ce nouvel conception dans base.ment_energie.equipement.id == ee.equipement.id:
                 configuration = element
 
         if configuration is None or ee.grandeur_energetique is None:
@@ -416,10 +453,10 @@ class MonController:
         type_equipement = ee.equipement.type.strip().lower()
         if type_equipement == "btr":
             energie = ee.grandeur_energetique * (1 + configuration.taux / 100.0)
-            resultat.grandeur_energetique = energie
+            resultat.grandeur_energetique = round(energie, 2)
         elif type_equipement == "ps" and configuration.taux != 0:
             energie = ee.grandeur_energetique * 100.0 / configuration.taux
-            resultat.grandeur_energetique = energie
+            resultat.grandeur_energetique = round(energie, 2)
 
         return resultat
 
@@ -434,8 +471,20 @@ class MonController:
             if not equipement_energie.energie_unitaire or not equipement_energie.prix_unitaire:
                 continue
 
-            quantite = math.ceil(equipement_energie.grandeur_energetique / equipement_energie.energie_unitaire)
-            prix_total = quantite * equipement_energie.prix_unitaire
+            quantite = math.csurplus, existance de heure de pointe qui seront majorée. 
+exemple : heure de pointe dans base : 12 h - 14 h et 17h - 19h
+supposons que dans la saisie, on a inséré : prix jour ouvrable/wh =100 et prix jour weekend/wh = 150.
+Il existe dans base taux de majoration (specifique pour jour ouvrable et pour jour weekend) 
+    taux_maj pour ouvrable 40%
+    taux_maj pour weekend 50%.
+    Il y aura donc de l impacte dans calcul de prix car pour les energies inutilisés qui seront dans les tranche d heure de point, il y a majoration selon le taux pour
+    le prix/wh (exemple si normal 100 Ar/wh pour jour ouvrable par exemple, lors de heure de pointe, ça devient 150 Ar/wh si on a inséré que taux majoration pour jour ouvrable 50%)
+    De meme pour jour weekend.
+Attente : ajout de champs avant submit pour les calcul, à part prix/Wh pour les deux jour (ouvrable et weekend), on ajoute aussi deux champs pour taux de majoration (un pour ouvrable et un autre pour weekend)
+
+Quels sont les fichiers de mon projet que vous avez besoin pour effectuer correctement ce changement? Veuillez aussi me donnez donc la conception dans base pour 
+l heure de pointe car vous en aurez besoin l implémentation de ce nouvel conception dans base.eil(round(equipement_energie.grandeur_energetique / equipement_energie.energie_unitaire, 10))
+            prix_total = round(quantite * equipement_energie.prix_unitaire, 2)
             propositions.append(
                 PropositionSurplus(
                     equipement_energie=deepcopy(equipement_energie),
@@ -447,45 +496,97 @@ class MonController:
         propositions.sort(key=lambda item: (item.prix_total, item.quantite_necessaire, item.equipement_energie.equipement.libelle))
         return propositions
 
+    # def _trouver_configuration_rendement_par_ee_et_tranche(
+    #     self,
+    #     ee_id: int,
+    #     tranche_id: int,
+    # ) -> ConfigurationRendement | None:
+    #     for cfg in self._configurations_rendement:
+    #         if cfg.equipement_energie.id == ee_id and cfg.tranche.id == tranche_id:
+    #             return cfg
+    #     return Noneuissance
+
     def calculer_energie_inutilisee(
         self,
         lud: list[UtilisationDetail],
-        besoins_pratiques: list[EquipementEnergie],
+        besoins_theoriques: list[EquipementEnergie],
+        besoins_pratiques: list[EquipementEnergie],  # ajout
     ) -> float:
-        """Calcule les Wh inutilises des panneaux solaires (type ps).
 
-        Pour chaque ps pratique, on recupere sa puissance disponible (grandeur_energetique en W).
-        On parcourt les utilisations hors tranche 'alina' (les memes que celles filtrees pour un ps)
-        et pour chaque intervalle on cumule :
-            max(0, puissance_ps - puissance_consommee) * duree_h
-        Si plusieurs ps sont presents, chacun contribue independamment.
-        """
-        wh_total = 0.0
+        puissance_totale_ps = round(sum(
+            ee.grandeur_energetique
+            for ee in besoins_theoriques
+            if ee.equipement.type.strip().lower() == "ps"
+            and ee.grandeur_energetique is not None
+            and ee.grandeur_energetique > 0
+        ), 4)
+        if puissance_totale_ps <= 0:
+            return 0.0
 
-        # Filtrer les lud pertinents pour les ps (hors alina), identique a filtrerUtilsationDSelonEquipementE pour ps
+        # Batterie PRATIQUE (ce que le panneau doit réellement fournir)
+        energie_batterie = 0.0
+        for e in besoins_pratiques:
+            if e.equipement.type.strip().lower() == "btr":
+                energie_batterie = e.grandeur_energetique or 0.0
+                break
+
         lud_ps = [
             detail for detail in lud
             if detail.tranche.libelle.strip().lower() != "alina"
         ]
-        if not lud_ps:
-            return 0.0
 
-        for ee in besoins_pratiques:
-            if ee.equipement.type.strip().lower() != "ps":
+        details_par_tranche: dict[str, list[UtilisationDetail]] = {}
+        for detail in lud_ps:
+            libelle = detail.tranche.libelle.strip().lower()
+            details_par_tranche.setdefault(libelle, []).append(detail)
+
+        wh_total = 0.0
+
+        for tranche_obj in self._tranches:
+            if tranche_obj.libelle.strip().lower() == "alina":
                 continue
-            if ee.grandeur_energetique is None or ee.grandeur_energetique <= 0:
-                continue
 
-            puissance_ps = ee.grandeur_energetique  # W disponibles par ce panneau
+            libelle_tranche = tranche_obj.libelle.strip().lower()
+            duree_tranche_h = self._duree_heure(tranche_obj.heure_debut, tranche_obj.heure_fin)
 
-            for detail in lud_ps:
-                duree_h = self._duree_heure(detail.heure_debut, detail.heure_fin)
-                puissance_consommee = detail.materiel_puissance.puissance
-                libre = puissance_ps - puissance_consommee
-                if libre > 0:
-                    wh_total += libre * duree_h
+            cfg = self._trouver_configuration_par_tranche_et_type_equipement(
+                libelle_tranche, "ps"
+            )
+            taux = cfg.taux if cfg is not None else 100.0
+            energie_max = round(puissance_totale_ps * taux / 100.0 * duree_tranche_h, 10)
 
-        return wh_total
+            details_tranche = details_par_tranche.get(libelle_tranche, [])
+            energie_consommee = 0.0
+
+            if details_tranche:
+                evenements: list[tuple[int, float]] = []
+                for detail in details_tranche:
+                    debut_sec = detail.heure_debut.hour * 3600 + detail.heure_debut.minute * 60
+                    fin_sec = detail.heure_fin.hour * 3600 + detail.heure_fin.minute * 60
+                    if fin_sec < debut_sec:
+                        fin_sec += 24 * 3600
+                    evenements.append((debut_sec, +detail.materiel_puissance.puissance))
+                    evenements.append((fin_sec, -detail.materiel_puissance.puissance))
+
+                evenements.sort(key=lambda e: (e[0], e[1]))
+
+                puissance_courante = 0.0
+                prev_t: int | None = None
+                i = 0
+
+                while i < len(evenements):
+                    t_current = evenements[i][0]
+                    if prev_t is not None and puissance_courante > 0:
+                        duree_h = round((t_current - prev_t) / 3600.0, 10)
+                        energie_consommee = round(energie_consommee + puissance_courante * duree_h, 10)
+                    while i < len(evenements) and evenements[i][0] == t_current:
+                        puissance_courante += evenements[i][1]
+                        i += 1
+                    prev_t = t_current
+
+            wh_total = round(wh_total + max(0.0, energie_max - energie_consommee), 10)
+
+        return round(max(0.0, wh_total - energie_batterie), 2)
 
     def proposerEnsemble(
         self,
@@ -523,7 +624,7 @@ class MonController:
             pratiques_btr.append(self.proposerPratique(ee_btr, configurations_pratiques))
 
         # --- Etape 3 : theorique pour les non-btr (ps, autre)
-        #     Les ps utilisent pratiques_btr au lieu de liste_reordonnee ---
+        # Les ps utilisent pratiques_btr au lieu de liste_reordonnee ---
         theoriques_non_btr: list[EquipementEnergie] = []
         for e in le_theorique:
             type_equipement = e.equipement.type.strip().lower()
@@ -555,9 +656,9 @@ class MonController:
         meilleure = propositions[0] if propositions else None
 
         # --- Calcul energie inutilisee ---
-        wh_libres = self.calculer_energie_inutilisee(lud, tous_les_pratiques)
-        montant_weekend = wh_libres * prix_weekend_wh
-        montant_ouvrables = wh_libres * prix_ouvrables_wh
+        wh_libres = self.calculer_energie_inutilisee(lud, resultats_theoriques, tous_les_pratiques)
+        montant_weekend = round(wh_libres * prix_weekend_wh, 2)
+        montant_ouvrables = round(wh_libres * prix_ouvrables_wh, 2)
 
         return (
             list(resultats_theoriques),
@@ -609,7 +710,19 @@ class MonController:
         ids_selectionnes = {item.id for item in selection if item.id is not None}
         for reference in self._equipements_energie_reference:
             if reference.equipement.id == equipement_id and reference.id not in ids_selectionnes:
-                return reference
+                return referesurplus, existance de heure de pointe qui seront majorée. 
+exemple : heure de pointe dans base : 12 h - 14 h et 17h - 19h
+supposons que dans la saisie, on a inséré : prix jour ouvrable/wh =100 et prix jour weekend/wh = 150.
+Il existe dans base taux de majoration (specifique pour jour ouvrable et pour jour weekend) 
+    taux_maj pour ouvrable 40%
+    taux_maj pour weekend 50%.
+    Il y aura donc de l impacte dans calcul de prix car pour les energies inutilisés qui seront dans les tranche d heure de point, il y a majoration selon le taux pour
+    le prix/wh (exemple si normal 100 Ar/wh pour jour ouvrable par exemple, lors de heure de pointe, ça devient 150 Ar/wh si on a inséré que taux majoration pour jour ouvrable 50%)
+    De meme pour jour weekend.
+Attente : ajout de champs avant submit pour les calcul, à part prix/Wh pour les deux jour (ouvrable et weekend), on ajoute aussi deux champs pour taux de majoration (un pour ouvrable et un autre pour weekend)
+
+Quels sont les fichiers de mon projet que vous avez besoin pour effectuer correctement ce changement? Veuillez aussi me donnez donc la conception dans base pour 
+l heure de pointe car vous en aurez besoin l implémentation de ce nouvel conception dans base.nce
         for reference in self._equipements_energie_reference:
             if reference.equipement.id == equipement_id:
                 return reference
@@ -656,7 +769,7 @@ class MonController:
         fin = datetime.combine(datetime.today(), heure_fin)
         if fin < debut:
             fin = fin + timedelta(days=1)
-        return (fin - debut).total_seconds() / 3600.0
+        return round((fin - debut).total_seconds() / 3600.0, 10)
 
     @staticmethod
     def _puissance_max_simultanee(details: list[UtilisationDetail]) -> float:
@@ -675,8 +788,8 @@ class MonController:
         courant = 0.0
         maximum = 0.0
         for _, variation in evenements:
-            courant += variation
+            courant = round(courant + variation, 10)
             if courant > maximum:
                 maximum = courant
 
-        return maximum
+        return round(maximum, 10)

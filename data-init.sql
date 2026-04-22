@@ -147,4 +147,18 @@ JOIN dbo.MaterielPuissance mp
 JOIN dbo.Tranche t
     ON t.libelle = v.libelle_tranche;
 GO
- veuillez modifier pour que dans l affichage des ETU, il y a mon numero ETU0042
+ 
+INSERT INTO dbo.UtilisationDetail (idMaterielPuissance, idTranche, HeureDebut, HeureFin)
+SELECT mp.id, t.id, v.heure_debut, v.heure_fin
+FROM (
+    VALUES
+        ('Lampe 10W', 'Alina',  '19:00:00', '23:00:00'),
+        ('TV 120W', 'AM',    '06:00:00', '08:00:00')
+) AS v(libelle_materiel, libelle_tranche, heure_debut, heure_fin)
+JOIN dbo.Materiel m
+    ON m.libelle = v.libelle_materiel
+JOIN dbo.MaterielPuissance mp
+    ON mp.idMaterielle = m.id
+JOIN dbo.Tranche t
+    ON t.libelle = v.libelle_tranche;
+GO

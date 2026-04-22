@@ -10,3 +10,4 @@ Donc ici, self.caclulMaxAdditiveSurplus(tempo, equipement_energie, liste_reordon
 , on n utilise plus liste_reordonnee mais directement une nouvelle liste des pratiques (pour les batteries)
 
 Resumé donc : on utilise resultat pratique des type btr pour chercher le théorique des ps
+

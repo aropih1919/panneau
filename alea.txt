@@ -1,0 +1,14 @@
+surplus, existance de heure de pointe qui seront majorée. 
+exemple : heure de pointe dans base : 12 h - 14 h et 17h - 19h
+supposons que dans la saisie, on a inséré : prix jour ouvrable/wh =100 et prix jour weekend/wh = 150.
+Il existe dans base taux de majoration (specifique pour jour ouvrable et pour jour weekend) 
+    taux_maj pour ouvrable 40%
+    taux_maj pour weekend 50%.
+    Il y aura donc de l impacte dans calcul de prix car pour les energies inutilisés qui seront dans les tranche d heure de point, il y a majoration selon le taux pour
+    le prix/wh (exemple si normal 100 Ar/wh pour jour ouvrable par exemple, lors de heure de pointe, ça devient 150 Ar/wh si on a inséré que taux majoration pour jour ouvrable 50%)
+    De meme pour jour weekend.
+Attente : ajout de champs avant submit pour les calcul, à part prix/Wh pour les deux jour (ouvrable et weekend), on ajoute aussi deux champs pour taux de majoration (un pour ouvrable et un autre pour weekend)
+
+Quels sont les fichiers de mon projet que vous avez besoin pour effectuer correctement ce changement? Veuillez aussi me donnez donc la conception dans base pour 
+l heure de pointe car vous en aurez besoin l implémentation de ce nouvel conception dans base.
+    
